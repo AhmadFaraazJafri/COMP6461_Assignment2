@@ -1,7 +1,6 @@
 package org.example;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
+import com.google.gson.*;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -78,12 +77,13 @@ public class HttpServer {
             args.add(entry.getKey(), new JsonPrimitive(entry.getValue()));
         }
 
+        jsonResponse.add("args", args);
+
         JsonObject headerInfo = new JsonObject();
         headerInfo.addProperty("Host", host);
         headerInfo.addProperty("User-Agent", userAgent);
         jsonResponse.add("headers", headerInfo);
 
-        jsonResponse.add("args", args);
         jsonResponse.addProperty("url", "http://localhost" + path);
 
         if (isVerbose) {
