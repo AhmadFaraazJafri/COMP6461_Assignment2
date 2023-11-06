@@ -70,6 +70,46 @@ public class FileServer {
                         processServeFileRequest(filePath, out, isVerbose);
                     }
                 }
+                if ("POST".equalsIgnoreCase(method) && path.startsWith("/")) {
+                    String[] pathTokens = path.split("/");
+                    if (pathTokens.length > 1) {
+                        String fileName = pathTokens[1];
+
+                        boolean overwrite = false;
+                        if (headers.containsKey("Overwrite") && headers.get("Overwrite").equalsIgnoreCase("true")) {
+                            overwrite = true;
+                        }
+
+                        StringBuilder requestBody = new StringBuilder();
+                        int contentLength = 0;
+
+                        if (headers.containsKey("Content-Length")) {
+                            contentLength = Integer.parseInt(headers.get("Content-Length"));
+                            char[] buffer = new char[contentLength];
+                            in.read(buffer, 0, contentLength);
+                            requestBody.append(buffer);
+                        }
+
+                        String content = requestBody.toString();
+
+                        String filePath = BASE_PATH + File.separator + fileName;
+
+                        File file = new File(filePath);
+
+                        if (overwrite || !file.exists()) {
+                            try (FileWriter writer = new FileWriter(file)) {
+                                writer.write(content);
+                            }
+
+                            sendResponse(200, "OK", "File created or overwritten", out, isVerbose);
+                        } else {
+                            sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", out, isVerbose);
+                        }
+                    } else {
+                        sendResponse(400, "Bad Request", "Invalid request format", out, isVerbose);
+                    }
+                }
+
             }
         }
 
@@ -167,7 +207,6 @@ public class FileServer {
                 sendFileResponse(200, "OK", file, out);
             }
         } else {
-            // Handle the case where the requested file does not exist
             sendResponse(404, "Not Found", "File not found", out, isVerbose);
         }
     }
