@@ -123,7 +123,7 @@ public class FileServer {
             } else if (acceptHeaderValue != null && acceptHeaderValue.contains("application/html")) {
                 contentType = "application/html";
             }else {
-                contentType = "application/json";
+                contentType = "application/text/plain";
             }
 
             sendResponseWithContentType(200, "OK", responseContent, contentType, out, isVerbose);
@@ -172,7 +172,6 @@ public class FileServer {
         }
     }
 
-    // Implement sendFileResponse methods for serving file content
     private static void sendFileResponse(int statusCode, String statusText, File file, OutputStream out) throws IOException {
         FileInputStream fileInputStream = new FileInputStream(file);
         byte[] buffer = new byte[1024];
