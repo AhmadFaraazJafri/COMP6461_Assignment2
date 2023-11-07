@@ -14,7 +14,7 @@ public class HttpServer {
     public static void main(String[] args) {
     }
 
-    public static void handleRequest(String method, String path, Map<String,String> headers, OutputStream out, boolean isVerbose, Socket clientSocket) throws IOException {
+    public static void handleRequest(String method, String path, Map<String, String> headers, OutputStream out, boolean isVerbose, Socket clientSocket) throws IOException {
 
         if ("GET".equalsIgnoreCase(method)) {
             processGETRequest(path, headers, out, isVerbose);
@@ -59,57 +59,46 @@ public class HttpServer {
         String host = headers.getOrDefault("Host", "localhost");
         String userAgent = headers.getOrDefault("User-Agent", "Java-http-client/21.0.1");
 
-        StringBuilder requestHeaders = new StringBuilder();
-        String line;
-        while ((line = readLine(requestBody)) != null) {
-            if (line.isEmpty()) {
+
+        int contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
+
+        char[] requestBodyData = new char[contentLength];
+        int bytesRead = 0;
+        while (bytesRead < contentLength) {
+            int c = requestBody.read();
+            if (c == -1) {
                 break;
             }
-            requestHeaders.append(line).append("\r\n");
+            requestBodyData[bytesRead] = (char) c;
+            bytesRead++;
         }
 
-        StringBuilder requestBodyContent = new StringBuilder();
-        while ((line = readLine(requestBody)) != null) {
-            requestBodyContent.append(line);
-        }
+        String requestBodyContent = new String(requestBodyData);
 
-        JsonObject requestBodyJson = parseJSON(requestBodyContent.toString());
+        JsonObject requestBodyJson = parseJSON(requestBodyContent);
 
         JsonObject jsonResponse = new JsonObject();
         jsonResponse.add("args", new JsonObject());
         JsonObject headerInfo = new JsonObject();
+
+        headerInfo.addProperty("Content-Length", contentLength);
+        headerInfo.addProperty("Content-Type", (headers.getOrDefault("Content-Type", "application/json")));
         headerInfo.addProperty("Host", host);
         headerInfo.addProperty("User-Agent", userAgent);
+
         jsonResponse.add("headers", headerInfo);
 
-        if (isVerbose) {
-            jsonResponse.add("data", requestBodyJson);
-            jsonResponse.addProperty("url", "http://" + host + path);
-        }
+        jsonResponse.addProperty("data", String.valueOf(requestBodyJson));
+        jsonResponse.add("json", requestBodyJson);
+        jsonResponse.addProperty("url", "http://" + host + path);
+
+
 
         if (isVerbose) {
             sendVerboseJSONResponse(200, "OK", jsonResponse, out);
         } else {
             sendJSONResponse(200, "OK", jsonResponse, out);
         }
-    }
-
-    private static String readLine(InputStream inputStream) throws IOException {
-        StringBuilder line = new StringBuilder();
-        int c;
-        while ((c = inputStream.read()) != -1) {
-            if (c == '\r') {
-                continue;
-            }
-            if (c == '\n') {
-                break;
-            }
-            line.append((char) c);
-        }
-        if (line.length() == 0) {
-            return null;
-        }
-        return line.toString();
     }
 
 
