@@ -12,59 +12,19 @@ import java.util.Map;
 public class HttpServer {
 
     public static void main(String[] args) {
-        int port = 8080;
-        try {
-            ServerSocket serverSocket = new ServerSocket(port);
-            System.out.println("Server is listening on port " + port);
+    }
 
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                handleRequest(clientSocket);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+    public static void handleRequest(String method, String path, Map<String,String> headers, OutputStream out, boolean isVerbose, Socket clientSocket) throws IOException {
+
+        if ("GET".equalsIgnoreCase(method)) {
+            processGETRequest(path, headers, out, isVerbose);
+        } else if ("POST".equalsIgnoreCase(method)) {
+            processPOSTRequest(path, headers, clientSocket.getInputStream(), out, isVerbose);
+        } else {
+            sendResponse(501, "Not Implemented", "HTTP method not supported", out, isVerbose);
         }
     }
 
-    private static void handleRequest(Socket clientSocket) throws IOException {
-        BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        OutputStream out = clientSocket.getOutputStream();
-
-        String requestLine = in.readLine();
-        if (requestLine != null) {
-            String[] requestTokens = requestLine.split(" ");
-            if (requestTokens.length == 3) {
-                String method = requestTokens[0];
-                String path = requestTokens[1];
-                Map<String, String> headers = new HashMap<>();
-
-                String line;
-                while ((line = in.readLine()) != null && !line.isEmpty()) {
-                    String[] headerTokens = line.split(": ");
-                    if (headerTokens.length == 2) {
-                        headers.put(headerTokens[0], headerTokens[1]);
-                    }
-                }
-
-                boolean isVerbose = false;
-                if (headers.containsKey("Verbose") && headers.get("Verbose").equalsIgnoreCase("true")) {
-                    isVerbose = true;
-                }
-
-                if ("GET".equalsIgnoreCase(method)) {
-                    processGETRequest(path, headers, out, isVerbose);
-                } else if ("POST".equalsIgnoreCase(method)) {
-                    processPOSTRequest(path, headers, clientSocket.getInputStream(), out, isVerbose);
-                } else {
-                    sendResponse(501, "Not Implemented", "HTTP method not supported", out, isVerbose);
-                }
-            }
-        }
-
-        in.close();
-        out.close();
-        clientSocket.close();
-    }
 
     private static void processGETRequest(String path, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {
         Map<String, String> queryParameters = getQueryParameters(path);
@@ -86,7 +46,7 @@ public class HttpServer {
         headerInfo.addProperty("User-Agent", userAgent);
         jsonResponse.add("headers", headerInfo);
 
-        jsonResponse.addProperty("url", "http://localhost" + path);
+        jsonResponse.addProperty("url", path);
 
         if (isVerbose) {
             sendVerboseJSONResponse(200, "OK", jsonResponse, out);
@@ -203,10 +163,22 @@ public class HttpServer {
     public static void sendResponse(int statusCode, String statusText, String content, OutputStream out, boolean isVerbose) throws IOException {
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Date: " + new Date() + "\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length: " + content.length() + "\r\n";
+
+        if (isVerbose) {
+            response += "Server: CNAssgn2LocalHTTPServer\r\n";
+            response += "Content-Type: application/json\r\n";
+            response += "Content-Length: " + content.length() + "\r\n";
+            response += "Connection: close\r\n";
+            response += "Access-Control-Allow-Origin: *\r\n";
+            response += "Access-Control-Allow-Credentials: true\r\n";
+        } else {
+            response += "Content-Type: text/plain\r\n";
+            response += "Content-Length: " + content.length() + "\r\n";
+        }
+
         response += "\r\n" + content;
 
         out.write(response.getBytes());
     }
+
 }

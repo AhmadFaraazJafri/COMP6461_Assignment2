@@ -3,9 +3,13 @@ package org.example;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -18,17 +22,28 @@ import static org.example.HttpServer.sendVerboseJSONResponse;
 
 public class FileServer {
 
-    private static final String BASE_PATH = "C:\\Users\\afjaf\\IdeaProjects\\CN2";
+    private static String DIR_PATH = System.getProperty("user.dir");
+    private static String BASE_PATH = System.getProperty("user.dir");
+    private static final int MAX_THREADS = 10;
+    private static ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
 
     public static void main(String[] args) {
+
         int port = 8081;
         try {
             ServerSocket serverSocket = new ServerSocket(port);
-            System.out.println("FileServer is listening on port " + port);
+            System.out.println("Main Server is listening on port " + port);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                handleRequest(clientSocket);
+
+                executor.execute(() -> {
+                    try {
+                        handleRequest(clientSocket);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -38,6 +53,7 @@ public class FileServer {
     private static void handleRequest(Socket clientSocket) throws IOException {
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         OutputStream out = clientSocket.getOutputStream();
+        String dir = "";
 
         String requestLine = in.readLine();
         if (requestLine != null) {
@@ -61,55 +77,69 @@ public class FileServer {
                     isVerbose = true;
                 }
 
-                if ("GET".equalsIgnoreCase(method) && path.startsWith("/")) {
-                    String filePath = BASE_PATH + path;
-                    if ("/".equals(path)) {
-                        processListFilesRequest(filePath, headers, out, isVerbose);
-                    }
-                    else {
-                        processServeFileRequest(filePath, out, isVerbose);
-                    }
+                if (headers.containsKey("dir")) {
+                    dir = headers.get("dir");
+                    DIR_PATH = dir;
                 }
-                if ("POST".equalsIgnoreCase(method) && path.startsWith("/")) {
-                    String[] pathTokens = path.split("/");
-                    if (pathTokens.length > 1) {
-                        String fileName = pathTokens[1];
 
-                        boolean overwrite = false;
-                        if (headers.containsKey("Overwrite") && headers.get("Overwrite").equalsIgnoreCase("true")) {
-                            overwrite = true;
-                        }
+                Path base = Paths.get(BASE_PATH);
+                Path relative = Paths.get(DIR_PATH);
 
-                        StringBuilder requestBody = new StringBuilder();
-                        int contentLength = 0;
-
-                        if (headers.containsKey("Content-Length")) {
-                            contentLength = Integer.parseInt(headers.get("Content-Length"));
-                            char[] buffer = new char[contentLength];
-                            in.read(buffer, 0, contentLength);
-                            requestBody.append(buffer);
-                        }
-
-                        String content = requestBody.toString();
-
-                        String filePath = BASE_PATH + File.separator + fileName;
-
-                        File file = new File(filePath);
-
-                        if (overwrite || !file.exists()) {
-                            try (FileWriter writer = new FileWriter(file)) {
-                                writer.write(content);
+                if (!relative.startsWith(base)) {
+                    sendResponse(403, "Forbidden", "Access to the requested directory is not allowed.", out, isVerbose);
+                } else {
+                    if ("httpfs".equalsIgnoreCase(headers.get("Request-Type"))) {
+                        if ("GET".equalsIgnoreCase(method) && path.startsWith("/")) {
+                            String filePath = DIR_PATH + path;
+                            if ("/".equals(path)) {
+                                processListFilesRequest(filePath, headers, out, isVerbose);
+                            } else {
+                                processServeFileRequest(filePath, out, isVerbose);
                             }
-
-                            sendResponse(200, "OK", "File created or overwritten", out, isVerbose);
-                        } else {
-                            sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", out, isVerbose);
                         }
-                    } else {
-                        sendResponse(400, "Bad Request", "Invalid request format", out, isVerbose);
+                        if ("POST".equalsIgnoreCase(method) && path.startsWith("/")) {
+                            String[] pathTokens = path.split("/");
+                            if (pathTokens.length > 1) {
+                                String fileName = pathTokens[1];
+
+                                boolean overwrite = false;
+                                if (headers.containsKey("Overwrite") && headers.get("Overwrite").equalsIgnoreCase("true")) {
+                                    overwrite = true;
+                                }
+
+                                StringBuilder requestBody = new StringBuilder();
+                                int contentLength = 0;
+
+                                if (headers.containsKey("Content-Length")) {
+                                    contentLength = Integer.parseInt(headers.get("Content-Length"));
+                                    char[] buffer = new char[contentLength];
+                                    in.read(buffer, 0, contentLength);
+                                    requestBody.append(buffer);
+                                }
+
+                                String content = requestBody.toString();
+
+                                String filePath = DIR_PATH + File.separator + fileName;
+
+                                File file = new File(filePath);
+
+                                if (overwrite || !file.exists()) {
+                                    try (FileWriter writer = new FileWriter(file)) {
+                                        writer.write(content);
+                                    }
+
+                                    sendResponse(200, "OK", "File created or overwritten", out, isVerbose);
+                                } else {
+                                    sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", out, isVerbose);
+                                }
+                            } else {
+                                sendResponse(400, "Bad Request", "Invalid request format", out, isVerbose);
+                            }
+                        }
+                    } else if ("httpc".equalsIgnoreCase(headers.get("Request-Type"))) {
+                        HttpServer.handleRequest(method, path, headers, out, isVerbose, clientSocket);
                     }
                 }
-
             }
         }
 
@@ -140,8 +170,7 @@ public class FileServer {
                 JsonObject jsonResponse = new JsonObject();
                 jsonResponse.add("files", fileArray);
                 responseContent = gson.toJson(jsonResponse);
-            }
-            else if (acceptHeaderValue != null && acceptHeaderValue.contains("application/xml")) {
+            } else if (acceptHeaderValue != null && acceptHeaderValue.contains("application/xml")) {
                 responseContent = "<files>\n";
                 for (File file : files) {
                     responseContent += "\t<file>\n";
@@ -162,7 +191,7 @@ public class FileServer {
                 contentType = "application/xml";
             } else if (acceptHeaderValue != null && acceptHeaderValue.contains("application/html")) {
                 contentType = "application/html";
-            }else {
+            } else {
                 contentType = "application/text/plain";
             }
 
@@ -194,7 +223,6 @@ public class FileServer {
 
         out.write(response.getBytes());
     }
-
 
 
     private static void processServeFileRequest(String filePath, OutputStream out, boolean isVerbose) throws IOException {
@@ -250,4 +278,6 @@ public class FileServer {
 
         fileInputStream.close();
     }
+
+
 }
