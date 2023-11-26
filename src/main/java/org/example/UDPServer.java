@@ -33,7 +33,7 @@ public class UDPServer {
         OptionSet opts = parser.parse(args);
         int port = Integer.parseInt((String) opts.valueOf("port"));
 
-        InetSocketAddress routerAddress = new InetSocketAddress("localhost", 3000);
+        SocketAddress routerAddress = new InetSocketAddress("localhost", 3000);
 
         try (DatagramChannel channel = DatagramChannel.open()) {
             channel.bind(new InetSocketAddress(port));
@@ -58,7 +58,7 @@ public class UDPServer {
                 switch (receivedPacket.getType()) {
                     case Packet.SYN:
                         System.out.println("Server: SYN packet received from client. Sequence Number: " + receivedPacket.getSequenceNumber());
-                        handleSynPacket(receivedPacket, routerAddress);
+                        handleSynPacket(channel, receivedPacket, routerAddress);
                         break;
                     case Packet.ACK:
                         handleAckPacket(receivedPacket);
@@ -93,7 +93,7 @@ public class UDPServer {
         switch (receivedPacket.getType()) {
             case Packet.SYN:
                 System.out.println("Server: SYN packet received from client. Sequence Number: " + receivedPacket.getSequenceNumber());
-                handleSynPacket(receivedPacket, routerAddress);
+                handleSynPacket(channel, receivedPacket, routerAddress);
                 break;
             case Packet.ACK:
                 handleAckPacket(receivedPacket);
@@ -110,24 +110,24 @@ public class UDPServer {
         }
     }
 
-    private static void handleSynPacket(Packet packet, InetSocketAddress routerAddress) throws Exception {
+    private static void handleSynPacket(DatagramChannel channel, Packet packet, SocketAddress routerAddress) throws Exception {
         Packet synAckPacket = constructReplyPacket((byte) Packet.SYN_ACK, serverSequenceNumber, packet, "SYN-ACK".getBytes());
-        sendPacket(synAckPacket, routerAddress);
+        sendPacket(channel, synAckPacket, routerAddress);
         System.out.println("Server: SYN-ACK packet sent to client. Sequence Number: " + serverSequenceNumber);
     }
 
-    private static Packet constructReplyPacket(byte synAck, long serverSequenceNumber, Packet packet, byte[] payload) {
+    private static Packet constructReplyPacket(byte type, long serverSequenceNumber, Packet packet, byte[] payload) {
         Packet replyPacket = packet.toBuilder()
+                .setType(type)
+                .setSequenceNumber(serverSequenceNumber)
                 .setPayload(payload)
                 .create();
         return replyPacket;
     }
 
-    private static void sendPacket(Packet packet, SocketAddress destination) throws Exception {
-        try (DatagramChannel channel = DatagramChannel.open()) {
+    private static void sendPacket(DatagramChannel channel, Packet packet, SocketAddress destination) throws Exception {
             channel.send(packet.toBuffer(),destination);
             System.out.println("Sent packet to: " + destination);
-        }
     }
 
     private static void handleAckPacket(Packet ackPacket) {
