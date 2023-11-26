@@ -11,6 +11,7 @@ import java.nio.ByteOrder;
  * As we don't have unsigned types in Java, we can achieve this by using a larger type.
  */
 public class Packet {
+
     public static final int SYN = 0;
     public static final int SYN_ACK = 1;
     public static final int ACK = 2;
@@ -23,16 +24,19 @@ public class Packet {
     private final int type;
     private final long sequenceNumber;
     private final InetAddress peerAddress;
+
+    private final long ackNumber;
     private final int peerPort;
     private final byte[] payload;
 
 
-    public Packet(int type, long sequenceNumber, InetAddress peerAddress, int peerPort, byte[] payload) {
+    public Packet(int type, long sequenceNumber, InetAddress peerAddress, int peerPort, byte[] payload, long ackNumber) {
         this.type = type;
         this.sequenceNumber = sequenceNumber;
         this.peerAddress = peerAddress;
         this.peerPort = peerPort;
         this.payload = payload;
+        this.ackNumber = ackNumber;
     }
 
     public int getType() {
@@ -45,6 +49,9 @@ public class Packet {
 
     public InetAddress getPeerAddress() {
         return peerAddress;
+    }
+    public long getAckNumber() {
+        return ackNumber;
     }
 
     public int getPeerPort() {
@@ -65,6 +72,7 @@ public class Packet {
                 .setSequenceNumber(sequenceNumber)
                 .setPeerAddress(peerAddress)
                 .setPortNumber(peerPort)
+                .setAckNumber(ackNumber)
                 .setPayload(payload);
     }
 
@@ -77,6 +85,7 @@ public class Packet {
         buf.putInt((int) sequenceNumber);
         buf.put(peerAddress.getAddress());
         buf.putShort((short) peerPort);
+        buf.putInt((int) ackNumber);
         buf.put(payload);
     }
 
@@ -118,6 +127,8 @@ public class Packet {
         builder.setPeerAddress(Inet4Address.getByAddress(host));
         builder.setPortNumber(Short.toUnsignedInt(buf.getShort()));
 
+        builder.setAckNumber(Integer.toUnsignedLong(buf.getInt()));
+
         byte[] payload = new byte[buf.remaining()];
         buf.get(payload);
         builder.setPayload(payload);
@@ -147,6 +158,8 @@ public class Packet {
         private int portNumber;
         private byte[] payload;
 
+        private long ackNumber;
+
         public Builder setType(int type) {
             this.type = type;
             return this;
@@ -171,9 +184,14 @@ public class Packet {
             this.payload = payload;
             return this;
         }
+        public Builder setAckNumber(long ackNumber) {
+            this.ackNumber = ackNumber;
+            return this;
+        }
+
 
         public Packet create() {
-            return new Packet(type, sequenceNumber, peerAddress, portNumber, payload);
+            return new Packet(type, sequenceNumber, peerAddress, portNumber, payload, ackNumber);
         }
     }
 }

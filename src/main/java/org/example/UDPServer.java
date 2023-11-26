@@ -17,6 +17,8 @@ import static java.util.Arrays.asList;
 public class UDPServer {
 
     private static long lastReceivedSequenceNumber = -1;
+
+    private static long lastReceivedClientSequenceNumber = -1;
     private static long serverSequenceNumber = 2000; // Initial server sequence number
     private static long expectedDataSequenceNumber = -1;
 
@@ -117,22 +119,29 @@ public class UDPServer {
     }
 
     private static Packet constructReplyPacket(byte type, long serverSequenceNumber, Packet packet, byte[] payload) {
+        long clientACK = packet.getSequenceNumber() + 1;
+        lastReceivedClientSequenceNumber = clientACK;
+
         Packet replyPacket = packet.toBuilder()
                 .setType(type)
                 .setSequenceNumber(serverSequenceNumber)
                 .setPayload(payload)
+                .setAckNumber(clientACK)
                 .create();
         return replyPacket;
     }
 
     private static void sendPacket(DatagramChannel channel, Packet packet, SocketAddress destination) throws Exception {
-            channel.send(packet.toBuffer(),destination);
-            System.out.println("Sent packet to: " + destination);
+        channel.send(packet.toBuffer(), destination);
+        System.out.println("Sent packet to: " + destination);
     }
 
     private static void handleAckPacket(Packet ackPacket) {
-        System.out.println("Server: Received ACK packet from client. Handshake complete. Sequence Number: " + ackPacket.getSequenceNumber());
-        lastReceivedSequenceNumber = ackPacket.getSequenceNumber();
+        if (ackPacket.getAckNumber() == serverSequenceNumber + 1 && ackPacket.getType() == Packet.ACK) {
+            System.out.println("Server: Received ACK packet from client. Handshake complete. Sequence Number: " + ackPacket.getSequenceNumber());
+            System.out.println("Received ACK: " + ackPacket.getAckNumber());
+            lastReceivedSequenceNumber = ackPacket.getSequenceNumber();
+        }
         System.out.println("Server: Last Received Sequence Number: " + lastReceivedSequenceNumber);
     }
 
