@@ -3,12 +3,19 @@ package org.example;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
 
 import static java.nio.channels.SelectionKey.OP_READ;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Arrays.asList;
 
 public class UDPServer {
 
@@ -16,45 +23,107 @@ public class UDPServer {
     private static long serverSequenceNumber = 2000; // Initial server sequence number
     private static long expectedDataSequenceNumber = -1;
 
+    private static final Logger logger = LoggerFactory.getLogger(UDPServer.class);
+
     public static void main(String[] args) throws IOException {
-        InetSocketAddress serverAddress = new InetSocketAddress("localhost", 8007);
+//        InetSocketAddress serverAddress = new InetSocketAddress("localhost", 8007);
+        OptionParser parser = new OptionParser();
+        parser.acceptsAll(asList("port", "p"), "Listening port")
+                .withOptionalArg()
+                .defaultsTo("8007");
+
+        OptionSet opts = parser.parse(args);
+        int port = Integer.parseInt((String) opts.valueOf("port"));
+
         InetSocketAddress routerAddress = new InetSocketAddress("localhost", 3000);
+
         try (DatagramChannel channel = DatagramChannel.open()) {
-            channel.bind(serverAddress);
-            channel.configureBlocking(false);
+            channel.bind(new InetSocketAddress(port));
+            logger.info("EchoServer is listening at {}", channel.getLocalAddress());
+            ByteBuffer buf = ByteBuffer
+                    .allocate(Packet.MAX_LEN)
+                    .order(ByteOrder.BIG_ENDIAN);
+//            channel.configureBlocking(false);
+//
+//            Selector selector = Selector.open();
+//            channel.register(selector, OP_READ);
+//
+//            System.out.println("Server: Waiting for incoming connections...");
 
-            Selector selector = Selector.open();
-            channel.register(selector, OP_READ);
+//            while (true) {
+//                selector.select();
+//
+//                Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
+//                while (keyIterator.hasNext()) {
+//                    SelectionKey key = keyIterator.next();
+//
+//                    if (key.isReadable()) {
+//                        DatagramChannel readChannel = (DatagramChannel) key.channel();
+//                        ByteBuffer buf = ByteBuffer.allocate(Packet.MAX_LEN);
+//                        SocketAddress clientAddress = readChannel.receive(buf);
+//                        System.out.println(clientAddress);
+//                        buf.flip();
+//                        Packet receivedPacket = Packet.fromBuffer(buf);
+//
+////                        handleReceivedPacket(readChannel, clientAddress, receivedPacket, routerAddress);
+//                        handleReceivedPacketUsingPacket(readChannel, clientAddress, receivedPacket, routerAddress);
+//
+//                    }
+//
+//                    keyIterator.remove();
 
-            System.out.println("Server: Waiting for incoming connections...");
+            for (; ; ) {
+                buf.clear();
+                SocketAddress router = channel.receive(buf);
 
-            while (true) {
-                selector.select();
+                // Parse a packet from the received raw data.
+                buf.flip();
+                Packet packet = Packet.fromBuffer(buf);
+                buf.flip();
 
-                Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
-                while (keyIterator.hasNext()) {
-                    SelectionKey key = keyIterator.next();
+                String payload = new String(packet.getPayload(), UTF_8);
+                logger.info("Packet: {}", packet);
+                logger.info("Payload: {}", payload);
+                logger.info("Router: {}", router);
 
-                    if (key.isReadable()) {
-                        DatagramChannel readChannel = (DatagramChannel) key.channel();
-                        ByteBuffer buf = ByteBuffer.allocate(Packet.MAX_LEN);
-                        SocketAddress clientAddress = readChannel.receive(buf);
-                        System.out.println(clientAddress);
-                        buf.flip();
-                        Packet receivedPacket = Packet.fromBuffer(buf);
-
-                        handleReceivedPacket(readChannel, clientAddress, receivedPacket, routerAddress);
-                    }
-
-                    keyIterator.remove();
+                // Send the response to the router not the client.
+                // The peer address of the packet is the address of the client already.
+                // We can use toBuilder to copy properties of the current packet.
+                // This demonstrate how to create a new packet from an existing packet.
+//                Packet resp = packet.toBuilder()
+//                        .setPayload(payload.getBytes())
+//                        .create();
+//                channel.send(resp.toBuffer(), router);
+            }
                 }
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+
+
+    private static void handleReceivedPacket(DatagramChannel channel, SocketAddress clientAddress, Packet receivedPacket, InetSocketAddress routerAddress) throws Exception {
+        switch (receivedPacket.getType()) {
+            case Packet.SYN:
+                System.out.println("Server: SYN packet received from client. Sequence Number: " + receivedPacket.getSequenceNumber());
+                handleSynPacket(channel, (InetSocketAddress) clientAddress, routerAddress);
+                break;
+            case Packet.ACK:
+                handleAckPacket(channel, clientAddress, receivedPacket);
+                break;
+            case Packet.DATA:
+                if (handshakeComplete()) {
+                    handleDataPacket(channel, clientAddress, receivedPacket);
+                } else {
+                    System.out.println("Server: Ignoring DATA packet. Handshake not completed.");
+                }
+                break;
+            default:
+                System.out.println("Server: Unexpected packet type received.");
         }
     }
 
-    private static void handleReceivedPacket(DatagramChannel channel, SocketAddress clientAddress, Packet receivedPacket, InetSocketAddress routerAddress) throws Exception {
+    private static void handleReceivedPacketUsingPacket(DatagramChannel channel, SocketAddress clientAddress, Packet receivedPacket, InetSocketAddress routerAddress) throws Exception {
         switch (receivedPacket.getType()) {
             case Packet.SYN:
                 System.out.println("Server: SYN packet received from client. Sequence Number: " + receivedPacket.getSequenceNumber());
