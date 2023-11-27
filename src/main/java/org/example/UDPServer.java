@@ -176,6 +176,8 @@ public class UDPServer {
 //            sendDataAckPacket(channel, clientAddress, dataPacket.getSequenceNumber());
             expectedDataSequenceNumber++;
         } else {
+            Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
+            sendPacket(channel, dataAckPacket, routerAddress);
             System.err.println("Server: Out-of-order packet received. Ignoring. Expected: " + expectedDataSequenceNumber + ", Received: " + dataPacket.getSequenceNumber());
         }
     }
