@@ -7,6 +7,7 @@ import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.Set;
@@ -161,6 +162,13 @@ public class UDPServer {
 
     private static void handleDataPacket(DatagramChannel channel, Packet dataPacket, SocketAddress routerAddress) throws Exception {
         System.out.println("DATA Packet Received from client. | Sequence Number: " + dataPacket.getSequenceNumber() + " | ACK number received: " + dataPacket.getAckNumber());
+
+        byte[] payload = dataPacket.getPayload();
+
+        // Convert the payload to a String (assuming it contains text data)
+        String payloadString = new String(payload, StandardCharsets.UTF_8);
+        System.out.println("request: " + payloadString);
+
         if (dataPacket.getSequenceNumber() == expectedDataSequenceNumber && dataPacket.getType() == Packet.DATA) {
 
 
@@ -173,6 +181,7 @@ public class UDPServer {
 //            System.out.println("Server: Received data: " + receivedData);
 //            sendDataAckPacket(channel, clientAddress, dataPacket.getSequenceNumber());
             expectedDataSequenceNumber++;
+            serverSequenceNumber++;
         } else {
             Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
             sendPacket(channel, dataAckPacket, routerAddress);
@@ -201,7 +210,7 @@ public class UDPServer {
         Selector selector = Selector.open();
         channel.register(selector, OP_READ);
         System.out.println("Waiting for Response:");
-        selector.select(5000);
+        selector.select(7000);
         System.out.println();
 
         Set<SelectionKey> keys = selector.selectedKeys();
