@@ -5,14 +5,18 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 
+import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 
@@ -53,13 +57,6 @@ public class UDPServer {
                 buf.flip();
                 Packet receivedPacket = Packet.fromBuffer(buf);
                 buf.flip();
-
-                String payload = new String(receivedPacket.getPayload(), UTF_8);
-//                logger.info("Packet: {}", receivedPacket);
-//                logger.info("Payload: {}", payload);
-//                logger.info("Router: {}", router);
-
-
 
                 switch (receivedPacket.getType()) {
                     case Packet.SYN:
@@ -110,6 +107,7 @@ public class UDPServer {
             case Packet.DATA:
                 if (handshakeComplete()) {
                     handleDataPacket(channel, receivedPacket, routerAddress);
+
                 } else {
                     System.out.println("Server: Ignoring DATA packet. Handshake not completed.");
                 }
@@ -196,5 +194,23 @@ public class UDPServer {
                 .setPayload(payload)
                 .create();
         return p;
+    }
+    public static Boolean Timout(DatagramChannel channel) throws IOException {
+        // Try to receive a packet within timeout.
+        channel.configureBlocking(false);
+        Selector selector = Selector.open();
+        channel.register(selector, OP_READ);
+        System.out.println("Waiting for Response:");
+        selector.select(5000);
+        System.out.println();
+
+        Set<SelectionKey> keys = selector.selectedKeys();
+        if (keys.isEmpty()) {
+            System.out.println("No response after timout");
+            System.out.println();
+            return true;
+        }
+        keys.clear();
+        return false;
     }
 }
