@@ -156,6 +156,7 @@ public class UDPServer {
             System.out.println("Server: Received ACK packet from client. | Sequence Number received: " + ackPacket.getSequenceNumber() + " | Handshake complete. | " + " ACK number received: " + ackPacket.getAckNumber());
             lastReceivedSequenceNumber = ackPacket.getSequenceNumber();
             expectedDataSequenceNumber = lastReceivedSequenceNumber + 1;
+            serverSequenceNumber = ackPacket.getAckNumber();
         }
 //        System.out.println("Server: Last Received Sequence Number: " + lastReceivedSequenceNumber);
     }
@@ -166,6 +167,7 @@ public class UDPServer {
 
 
             Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
+            System.out.println("Server: DATA_ACK packet sent to client. Sequence Number sent: " + dataAckPacket.getSequenceNumber() +" ACK sent: "+ dataAckPacket.getAckNumber());
             sendPacket(channel, dataAckPacket, routerAddress);
 
 //            System.out.println("Server: Received DATA packet from client. Sequence Number: " + dataPacket.getSequenceNumber());
@@ -176,19 +178,6 @@ public class UDPServer {
         } else {
             System.err.println("Server: Out-of-order packet received. Ignoring. Expected: " + expectedDataSequenceNumber + ", Received: " + dataPacket.getSequenceNumber());
         }
-    }
-
-    private static void sendDataAckPacket(DatagramChannel channel, SocketAddress clientAddress, long sequenceNumber) throws IOException {
-        Packet dataAckPacket = new Packet.Builder()
-                .setType(Packet.DATA_ACK)
-                .setSequenceNumber(sequenceNumber)
-                .setPortNumber(((InetSocketAddress) channel.getLocalAddress()).getPort())
-                .setPeerAddress(((InetSocketAddress) clientAddress).getAddress())
-                .setPayload("DATA_ACK".getBytes())
-                .create();
-
-        channel.send(dataAckPacket.toBuffer(), clientAddress);
-        System.out.println("Server: Sent DATA_ACK packet to client. Sequence Number: " + sequenceNumber);
     }
 
     private static boolean handshakeComplete() {
