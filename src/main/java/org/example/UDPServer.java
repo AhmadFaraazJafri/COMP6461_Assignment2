@@ -109,11 +109,11 @@ public class UDPServer {
                     handleDataPacket(channel, receivedPacket, routerAddress);
 
                 } else {
-                    System.out.println("Server: Ignoring DATA packet. Handshake not completed.");
+                    System.err.println("Server: Ignoring DATA packet. Handshake not completed.");
                 }
                 break;
             default:
-                System.out.println("Server: Unexpected packet type received.");
+                System.err.println("Server: Unexpected packet type received.");
         }
     }
 
