@@ -5,6 +5,8 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
+import java.util.Arrays;
+import java.util.Random;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,21 +55,26 @@ public class UDPServer {
                 buf.flip();
 
                 String payload = new String(receivedPacket.getPayload(), UTF_8);
-                logger.info("Packet: {}", receivedPacket);
-                logger.info("Payload: {}", payload);
-                logger.info("Router: {}", router);
+//                logger.info("Packet: {}", receivedPacket);
+//                logger.info("Payload: {}", payload);
+//                logger.info("Router: {}", router);
+
+
 
                 switch (receivedPacket.getType()) {
                     case Packet.SYN:
+                        System.out.println();
                         System.out.println("Server: SYN packet received from client. Sequence Number: " + receivedPacket.getSequenceNumber());
                         handleSynPacket(channel, receivedPacket, routerAddress);
                         break;
                     case Packet.ACK:
+                        System.out.println();
                         handleAckPacket(receivedPacket);
                         break;
                     case Packet.DATA:
+                        System.out.println();
                         if (handshakeComplete()) {
-//                            handleDataPacket(channel, receivedPacket, receivedPacket);
+                            handleDataPacket(channel, receivedPacket, routerAddress);
                         } else {
                             System.out.println("Server: Ignoring DATA packet. Handshake not completed.");
                         }
@@ -94,7 +101,7 @@ public class UDPServer {
     private static void handleReceivedPacketUsingPacket(DatagramChannel channel, SocketAddress clientAddress, Packet receivedPacket, InetSocketAddress routerAddress) throws Exception {
         switch (receivedPacket.getType()) {
             case Packet.SYN:
-                System.out.println("Server: SYN packet received from client. Sequence Number: " + receivedPacket.getSequenceNumber());
+                System.out.println("Server: SYN packet received from client. Sequence Number received from client: " + receivedPacket.getSequenceNumber());
                 handleSynPacket(channel, receivedPacket, routerAddress);
                 break;
             case Packet.ACK:
@@ -102,7 +109,7 @@ public class UDPServer {
                 break;
             case Packet.DATA:
                 if (handshakeComplete()) {
-                    handleDataPacket(channel, clientAddress, receivedPacket);
+                    handleDataPacket(channel, receivedPacket, routerAddress);
                 } else {
                     System.out.println("Server: Ignoring DATA packet. Handshake not completed.");
                 }
@@ -113,9 +120,17 @@ public class UDPServer {
     }
 
     private static void handleSynPacket(DatagramChannel channel, Packet packet, SocketAddress routerAddress) throws Exception {
+
+        int clientSequenceNumber = (int) packet.getSequenceNumber();
+
+        while(clientSequenceNumber - serverSequenceNumber < 1000){
+            Random random = new Random();
+            serverSequenceNumber = random.nextInt(1000,20000);
+        }
+
         Packet synAckPacket = constructReplyPacket((byte) Packet.SYN_ACK, serverSequenceNumber, packet, "SYN-ACK".getBytes());
         sendPacket(channel, synAckPacket, routerAddress);
-        System.out.println("Server: SYN-ACK packet sent to client. Sequence Number: " + serverSequenceNumber);
+        System.out.println("Server: SYN-ACK packet sent to client. Sequence Number sent: " + synAckPacket.getSequenceNumber() +" ACK sent: "+ synAckPacket.getAckNumber());
     }
 
     private static Packet constructReplyPacket(byte type, long serverSequenceNumber, Packet packet, byte[] payload) {
@@ -133,24 +148,30 @@ public class UDPServer {
 
     private static void sendPacket(DatagramChannel channel, Packet packet, SocketAddress destination) throws Exception {
         channel.send(packet.toBuffer(), destination);
-        System.out.println("Sent packet to: " + destination);
+//        System.out.println("Sent packet to: " + destination);
     }
 
     private static void handleAckPacket(Packet ackPacket) {
         if (ackPacket.getAckNumber() == serverSequenceNumber + 1 && ackPacket.getType() == Packet.ACK) {
-            System.out.println("Server: Received ACK packet from client. Handshake complete. Sequence Number: " + ackPacket.getSequenceNumber());
-            System.out.println("Received ACK: " + ackPacket.getAckNumber());
+            System.out.println("Server: Received ACK packet from client. | Sequence Number received: " + ackPacket.getSequenceNumber() + " | Handshake complete. | " + " ACK number received: " + ackPacket.getAckNumber());
             lastReceivedSequenceNumber = ackPacket.getSequenceNumber();
+            expectedDataSequenceNumber = lastReceivedSequenceNumber + 1;
         }
-        System.out.println("Server: Last Received Sequence Number: " + lastReceivedSequenceNumber);
+//        System.out.println("Server: Last Received Sequence Number: " + lastReceivedSequenceNumber);
     }
 
-    private static void handleDataPacket(DatagramChannel channel, SocketAddress clientAddress, Packet dataPacket) throws IOException {
-        if (dataPacket.getSequenceNumber() == expectedDataSequenceNumber) {
-            System.out.println("Server: Received DATA packet from client. Sequence Number: " + dataPacket.getSequenceNumber());
-            String receivedData = new String(dataPacket.getPayload());
-            System.out.println("Server: Received data: " + receivedData);
-            sendDataAckPacket(channel, clientAddress, dataPacket.getSequenceNumber());
+    private static void handleDataPacket(DatagramChannel channel, Packet dataPacket, SocketAddress routerAddress) throws Exception {
+        System.out.println("DATA Packet Received from client. | Sequence Number: " + dataPacket.getSequenceNumber() + " | ACK number received: " + dataPacket.getAckNumber());
+        if (dataPacket.getSequenceNumber() == expectedDataSequenceNumber && dataPacket.getType() == Packet.DATA) {
+
+
+            Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
+            sendPacket(channel, dataAckPacket, routerAddress);
+
+//            System.out.println("Server: Received DATA packet from client. Sequence Number: " + dataPacket.getSequenceNumber());
+//            String receivedData = new String(dataPacket.getPayload());
+//            System.out.println("Server: Received data: " + receivedData);
+//            sendDataAckPacket(channel, clientAddress, dataPacket.getSequenceNumber());
             expectedDataSequenceNumber++;
         } else {
             System.err.println("Server: Out-of-order packet received. Ignoring. Expected: " + expectedDataSequenceNumber + ", Received: " + dataPacket.getSequenceNumber());
