@@ -8,9 +8,7 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +22,12 @@ import static java.util.Arrays.asList;
 public class UDPServer {
 
     private static long lastReceivedSequenceNumber = -1;
+
+    private static int windowSizeServer = 4;
+
+    private static HashMap<Integer, Packet> receivedWindowPackets = new HashMap<>();
+
+    private static List<Packet> receivedPackets = new ArrayList<>();
 
     private static long lastReceivedClientSequenceNumber = -1;
     private static long serverSequenceNumber = 2000; // Initial server sequence number
@@ -81,6 +85,13 @@ public class UDPServer {
                         System.out.println("Server: Unexpected packet type received.");
                 }
 
+                for (int i = 0; i < receivedPackets.size(); i++) {
+                    System.out.println("------------------------------------------------------");
+                    System.out.println("Packets received: " + receivedPackets.get(i));
+                    System.out.println("Size of array: " + receivedPackets.size());
+                    System.out.println("-------------------------------------------------------");
+                }
+
                 // Send the response to the router not the client.
                 // The peer address of the packet is the address of the client already.
                 // We can use toBuilder to copy properties of the current packet.
@@ -122,14 +133,14 @@ public class UDPServer {
 
         int clientSequenceNumber = (int) packet.getSequenceNumber();
 
-        while(clientSequenceNumber - serverSequenceNumber < 1000){
+        while (clientSequenceNumber - serverSequenceNumber < 1000) {
             Random random = new Random();
-            serverSequenceNumber = random.nextInt(1000,20000);
+            serverSequenceNumber = random.nextInt(1000, 20000);
         }
 
         Packet synAckPacket = constructReplyPacket((byte) Packet.SYN_ACK, serverSequenceNumber, packet, "SYN-ACK".getBytes());
         sendPacket(channel, synAckPacket, routerAddress);
-        System.out.println("Server: SYN-ACK packet sent to client. Sequence Number sent: " + synAckPacket.getSequenceNumber() +" ACK sent: "+ synAckPacket.getAckNumber());
+        System.out.println("Server: SYN-ACK packet sent to client. Sequence Number sent: " + synAckPacket.getSequenceNumber() + " ACK sent: " + synAckPacket.getAckNumber());
     }
 
     private static Packet constructReplyPacket(byte type, long serverSequenceNumber, Packet packet, byte[] payload) {
@@ -154,7 +165,14 @@ public class UDPServer {
         if (ackPacket.getAckNumber() == serverSequenceNumber + 1 && ackPacket.getType() == Packet.ACK) {
             System.out.println("Server: Received ACK packet from client. | Sequence Number received: " + ackPacket.getSequenceNumber() + " | Handshake complete. | " + " ACK number received: " + ackPacket.getAckNumber());
             lastReceivedSequenceNumber = ackPacket.getSequenceNumber();
-            expectedDataSequenceNumber = lastReceivedSequenceNumber + 1;
+
+
+            for (int i = 1; i <= windowSizeServer; i++) {
+                if (receivedWindowPackets.size() == windowSizeServer) {
+                    break;
+                }
+                receivedWindowPackets.put((int) (lastReceivedClientSequenceNumber + i), null);
+            }
             serverSequenceNumber = ackPacket.getAckNumber();
         }
 //        System.out.println("Server: Last Received Sequence Number: " + lastReceivedSequenceNumber);
@@ -169,19 +187,26 @@ public class UDPServer {
         String payloadString = new String(payload, StandardCharsets.UTF_8);
         System.out.println("request: " + payloadString);
 
-        if (dataPacket.getSequenceNumber() == expectedDataSequenceNumber && dataPacket.getType() == Packet.DATA) {
+        //Have to fix this and put all the code below to parent call
+        receivedWindowPackets.put((int) dataPacket.getSequenceNumber(), dataPacket);
+
+        if (receivedWindowPackets.containsKey((int) dataPacket.getSequenceNumber()) && dataPacket.getType() == Packet.DATA) {
 
 
-            Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
-            System.out.println("Server: DATA_ACK packet sent to client. Sequence Number sent: " + dataAckPacket.getSequenceNumber() +" ACK sent: "+ dataAckPacket.getAckNumber());
-            sendPacket(channel, dataAckPacket, routerAddress);
+            if (!containsPacket(receivedPackets, dataPacket)) {
+                Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
+                System.out.println("Server: DATA_ACK packet sent to client. Sequence Number sent: " + dataAckPacket.getSequenceNumber() + " ACK sent: " + dataAckPacket.getAckNumber());
+                sendPacket(channel, dataAckPacket, routerAddress);
 
-//            System.out.println("Server: Received DATA packet from client. Sequence Number: " + dataPacket.getSequenceNumber());
-//            String receivedData = new String(dataPacket.getPayload());
-//            System.out.println("Server: Received data: " + receivedData);
-//            sendDataAckPacket(channel, clientAddress, dataPacket.getSequenceNumber());
-            expectedDataSequenceNumber++;
-            serverSequenceNumber++;
+
+                receivedPackets.add(receivedWindowPackets.remove((int) dataPacket.getSequenceNumber()));
+
+                expectedDataSequenceNumber++;
+                serverSequenceNumber++;
+            } else {
+                System.out.println();
+                System.err.println("Duplicate Packet received: " + dataPacket.getSequenceNumber() + " | Hence Dropped!");
+            }
         } else {
             Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
             sendPacket(channel, dataAckPacket, routerAddress);
@@ -204,6 +229,7 @@ public class UDPServer {
                 .create();
         return p;
     }
+
     public static Boolean Timout(DatagramChannel channel) throws IOException {
         // Try to receive a packet within timeout.
         channel.configureBlocking(false);
@@ -220,6 +246,16 @@ public class UDPServer {
             return true;
         }
         keys.clear();
+        return false;
+    }
+
+    private static boolean containsPacket(List<Packet> packetList, Packet targetPacket) {
+        for (Packet packet : packetList) {
+            if (packet.getSequenceNumber() == targetPacket.getSequenceNumber() &&
+                    packet.getAckNumber() == targetPacket.getAckNumber()) {
+                return true;
+            }
+        }
         return false;
     }
 }
