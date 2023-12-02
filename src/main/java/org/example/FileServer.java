@@ -53,7 +53,6 @@ public class FileServer {
     public static void handleRequest(String request) throws IOException {
         StringReader stringReader = new StringReader(request);
         BufferedReader in = new BufferedReader(stringReader);
-//        OutputStream out = new BufferedOutputStream()
         String dir = "";
 
         String requestLine = in.readLine();

@@ -17,6 +17,7 @@ public class Packet {
     public static final int ACK = 2;
     public static final int DATA = 3; // New type for data packets
     public static final int DATA_ACK = 4; // New type for acknowledgment of data packets
+    public static final int DATA_END = 5;
 
     public static final int MIN_LEN = 11;
     public static final int MAX_LEN = 11 + 1024;

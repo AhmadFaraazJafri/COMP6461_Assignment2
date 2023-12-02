@@ -27,9 +27,11 @@ public class UDPServer {
     private static int windowSizeServer = 4;
     private static String requestReceivedSoFar = "";
 
+    private static boolean isDataEndReceived = false;
+
     private static HashMap<Integer, Packet> receivedWindowPackets = new HashMap<>();
 
-    private static TreeMap<Integer,Packet> receivedPackets = new TreeMap<>();
+    private static TreeMap<Integer, Packet> receivedPackets = new TreeMap<>();
 
     private static long lastReceivedClientSequenceNumber = -1;
     private static long serverSequenceNumber = 2000; // Initial server sequence number
@@ -78,13 +80,23 @@ public class UDPServer {
                     case Packet.DATA:
                         System.out.println();
                         if (handshakeComplete()) {
-                            handleDataPacket(channel, receivedPacket, routerAddress);
+                            if (!isDataEndReceived) {
+                                handleDataPacket(channel, receivedPacket, routerAddress);
+                            } else {
+                                System.err.println("Duplicate data packet received | Ignoring packet with sequence number: " + receivedPacket.getSequenceNumber());
+                            }
                         } else {
-                            System.out.println("Server: Ignoring DATA packet. Handshake not completed.");
+                            System.err.println("Server: Ignoring DATA packet. Handshake not completed.");
                         }
                         break;
+                    case Packet.DATA_END:
+                        System.out.println();
+                        isDataEndReceived = true;
+                        handleRequest(requestReceivedSoFar);
+                        System.out.println("Completed the transfer of all packets!");
+                        break;
                     default:
-                        System.out.println("Server: Unexpected packet type received.");
+                        System.err.println("Server: Unexpected packet type received.");
                 }
 
 //                for (int i = 0; i < receivedPackets.size(); i++) {
@@ -195,7 +207,7 @@ public class UDPServer {
         if (receivedWindowPackets.containsKey((int) dataPacket.getSequenceNumber()) && dataPacket.getType() == Packet.DATA) {
 
 
-            if (!(receivedPackets.containsValue(dataPacket))) {
+            if (!(receivedPackets.containsKey((int) dataPacket.getSequenceNumber()))) {
                 Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
                 System.out.println("Server: DATA_ACK packet sent to client. Sequence Number sent: " + dataAckPacket.getSequenceNumber() + " ACK sent: " + dataAckPacket.getAckNumber());
                 sendPacket(channel, dataAckPacket, routerAddress);
@@ -211,7 +223,7 @@ public class UDPServer {
 //                requestReceivedSoFar = requestReceivedSoFar + packetpayloadString;
                 System.out.println("REQUEST RECEIVED SO FAR");
 //                System.out.println(requestReceivedSoFar);
-                requestReceivedSoFar ="";
+                requestReceivedSoFar = "";
                 for (Map.Entry<Integer, Packet> entry : receivedPackets.entrySet()) {
 
                     Packet temp = entry.getValue();
@@ -225,22 +237,13 @@ public class UDPServer {
                     System.out.println(requestReceivedSoFar);
                     System.out.println("-------");
 
-                    StringBuilder reverserequestBuilder = new StringBuilder(requestReceivedSoFar);
-
-                    // Use reverse() method to reverse the StringBuilder
-                    reverserequestBuilder.reverse();
-
-                    // Convert the StringBuilder back to a String
-                    String reversedRequest = reverserequestBuilder.toString();
-//                    System.out.println("Reversed back:");
-//                    System.out.println(reversedRequest);
-                    if (reversedRequest.startsWith("GET http://")) {
-                        handleRequest(reversedRequest);
-                    }
                 }
 
             } else {
                 System.out.println();
+                Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
+                System.out.println("Server: DATA_ACK packet sent to client. Sequence Number sent: " + dataAckPacket.getSequenceNumber() + " ACK sent: " + dataAckPacket.getAckNumber());
+                sendPacket(channel, dataAckPacket, routerAddress);
                 System.err.println("Duplicate Packet received: " + dataPacket.getSequenceNumber() + " | Hence Dropped!");
             }
         } else {
