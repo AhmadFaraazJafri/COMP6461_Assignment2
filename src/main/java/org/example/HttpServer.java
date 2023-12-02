@@ -48,6 +48,7 @@ public class HttpServer {
 
         jsonResponse.addProperty("url", path);
 
+        System.out.println("REQUEST PARSED");
         if (isVerbose) {
             sendVerboseJSONResponse(200, "OK", jsonResponse, out);
         } else {
@@ -131,7 +132,8 @@ public class HttpServer {
         response += "Content-Length: " + jsonString.length() + "\r\n";
         response += "\r\n" + jsonString;
 
-        out.write(response.getBytes());
+        System.out.println(response);
+//        out.write(response.getBytes());
     }
 
 
@@ -146,7 +148,8 @@ public class HttpServer {
         response += "Access-Control-Allow-Credentials: true\r\n";
         response += "\r\n" + json.toString();
 
-        out.write(response.getBytes());
+        System.out.println(response);
+//        out.write(response.getBytes());
     }
 
     public static void sendResponse(int statusCode, String statusText, String content, OutputStream out, boolean isVerbose) throws IOException {
@@ -167,7 +170,8 @@ public class HttpServer {
 
         response += "\r\n" + content;
 
-        out.write(response.getBytes());
+        System.out.println(response);
+//        out.write(response.getBytes());
     }
 
 }

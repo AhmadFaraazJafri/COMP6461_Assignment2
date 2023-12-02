@@ -18,16 +18,18 @@ import joptsimple.OptionSet;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
+import static org.example.FileServer.handleRequest;
 
 public class UDPServer {
 
     private static long lastReceivedSequenceNumber = -1;
 
     private static int windowSizeServer = 4;
+    private static String requestReceivedSoFar = "";
 
     private static HashMap<Integer, Packet> receivedWindowPackets = new HashMap<>();
 
-    private static List<Packet> receivedPackets = new ArrayList<>();
+    private static TreeMap<Integer,Packet> receivedPackets = new TreeMap<>();
 
     private static long lastReceivedClientSequenceNumber = -1;
     private static long serverSequenceNumber = 2000; // Initial server sequence number
@@ -85,12 +87,12 @@ public class UDPServer {
                         System.out.println("Server: Unexpected packet type received.");
                 }
 
-                for (int i = 0; i < receivedPackets.size(); i++) {
-                    System.out.println("------------------------------------------------------");
-                    System.out.println("Packets received: " + receivedPackets.get(i));
-                    System.out.println("Size of array: " + receivedPackets.size());
-                    System.out.println("-------------------------------------------------------");
-                }
+//                for (int i = 0; i < receivedPackets.size(); i++) {
+//                    System.out.println("------------------------------------------------------");
+//                    System.out.println("Packets received: " + receivedPackets.get(i));
+//                    System.out.println("Size of array: " + receivedPackets.size());
+//                    System.out.println("-------------------------------------------------------");
+//                }
 
                 // Send the response to the router not the client.
                 // The peer address of the packet is the address of the client already.
@@ -193,16 +195,50 @@ public class UDPServer {
         if (receivedWindowPackets.containsKey((int) dataPacket.getSequenceNumber()) && dataPacket.getType() == Packet.DATA) {
 
 
-            if (!containsPacket(receivedPackets, dataPacket)) {
+            if (!(receivedPackets.containsValue(dataPacket))) {
                 Packet dataAckPacket = constructReplyPacket((byte) Packet.DATA_ACK, serverSequenceNumber, dataPacket, "DATA_ACK".getBytes());
                 System.out.println("Server: DATA_ACK packet sent to client. Sequence Number sent: " + dataAckPacket.getSequenceNumber() + " ACK sent: " + dataAckPacket.getAckNumber());
                 sendPacket(channel, dataAckPacket, routerAddress);
 
-
-                receivedPackets.add(receivedWindowPackets.remove((int) dataPacket.getSequenceNumber()));
+                receivedPackets.put((int) dataPacket.getSequenceNumber(), receivedWindowPackets.remove((int) dataPacket.getSequenceNumber()));
 
                 expectedDataSequenceNumber++;
                 serverSequenceNumber++;
+                byte[] packetpayload = dataPacket.getPayload();
+
+                // Convert the payload to a String (assuming it contains text data)
+                String packetpayloadString = new String(packetpayload, StandardCharsets.UTF_8);
+//                requestReceivedSoFar = requestReceivedSoFar + packetpayloadString;
+                System.out.println("REQUEST RECEIVED SO FAR");
+//                System.out.println(requestReceivedSoFar);
+                requestReceivedSoFar ="";
+                for (Map.Entry<Integer, Packet> entry : receivedPackets.entrySet()) {
+
+                    Packet temp = entry.getValue();
+                    byte[] temppacketpayload = temp.getPayload();
+
+                    // Convert the payload to a String (assuming it contains text data)
+                    String temppacketpayloadString = new String(temppacketpayload, StandardCharsets.UTF_8);
+//                    System.out.println("Key: " + entry.getKey() + ", Value: " + temppacketpayloadString);
+                    requestReceivedSoFar = requestReceivedSoFar + temppacketpayloadString;
+
+                    System.out.println(requestReceivedSoFar);
+                    System.out.println("-------");
+
+                    StringBuilder reverserequestBuilder = new StringBuilder(requestReceivedSoFar);
+
+                    // Use reverse() method to reverse the StringBuilder
+                    reverserequestBuilder.reverse();
+
+                    // Convert the StringBuilder back to a String
+                    String reversedRequest = reverserequestBuilder.toString();
+//                    System.out.println("Reversed back:");
+//                    System.out.println(reversedRequest);
+                    if (reversedRequest.startsWith("GET http://")) {
+                        handleRequest(reversedRequest);
+                    }
+                }
+
             } else {
                 System.out.println();
                 System.err.println("Duplicate Packet received: " + dataPacket.getSequenceNumber() + " | Hence Dropped!");

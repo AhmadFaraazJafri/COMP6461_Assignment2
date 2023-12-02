@@ -27,32 +27,33 @@ public class FileServer {
     private static final int MAX_THREADS = 10;
     private static ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
 
-    public static void main(String[] args) {
+//    public static void main(String[] args) {
+//
+//        int port = 8081;
+//        try {
+//            ServerSocket serverSocket = new ServerSocket(port);
+//            System.out.println("Main Server is listening on port " + port);
+//
+//            while (true) {
+//                Socket clientSocket = serverSocket.accept();
+//
+//                executor.execute(() -> {
+//                    try {
+//                        handleRequest(clientSocket);
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    }
+//                });
+//            }
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//    }
 
-        int port = 8081;
-        try {
-            ServerSocket serverSocket = new ServerSocket(port);
-            System.out.println("Main Server is listening on port " + port);
-
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-
-                executor.execute(() -> {
-                    try {
-                        handleRequest(clientSocket);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void handleRequest(Socket clientSocket) throws IOException {
-        BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        OutputStream out = clientSocket.getOutputStream();
+    public static void handleRequest(String request) throws IOException {
+        StringReader stringReader = new StringReader(request);
+        BufferedReader in = new BufferedReader(stringReader);
+//        OutputStream out = new BufferedOutputStream()
         String dir = "";
 
         String requestLine = in.readLine();
@@ -86,15 +87,15 @@ public class FileServer {
                 Path relative = Paths.get(DIR_PATH);
 
                 if (!relative.startsWith(base)) {
-                    sendResponse(403, "Forbidden", "Access to the requested directory is not allowed.", out, isVerbose);
+                    sendResponse(403, "Forbidden", "Access to the requested directory is not allowed.", null, isVerbose);
                 } else {
                     if ("httpfs".equalsIgnoreCase(headers.get("Request-Type"))) {
                         if ("GET".equalsIgnoreCase(method) && path.startsWith("/")) {
                             String filePath = DIR_PATH + path;
                             if ("/".equals(path)) {
-                                processListFilesRequest(filePath, headers, out, isVerbose);
+                                processListFilesRequest(filePath, headers, null, isVerbose);
                             } else {
-                                processServeFileRequest(filePath, out, isVerbose);
+                                processServeFileRequest(filePath, null, isVerbose);
                             }
                         }
                         if ("POST".equalsIgnoreCase(method) && path.startsWith("/")) {
@@ -128,24 +129,22 @@ public class FileServer {
                                         writer.write(content);
                                     }
 
-                                    sendResponse(200, "OK", "File created or overwritten", out, isVerbose);
+                                    sendResponse(200, "OK", "File created or overwritten", null, isVerbose);
                                 } else {
-                                    sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", out, isVerbose);
+                                    sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", null, isVerbose);
                                 }
                             } else {
-                                sendResponse(400, "Bad Request", "Invalid request format", out, isVerbose);
+                                sendResponse(400, "Bad Request", "Invalid request format", null, isVerbose);
                             }
                         }
                     } else if ("httpc".equalsIgnoreCase(headers.get("Request-Type"))) {
-                        HttpServer.handleRequest(method, path, headers, out, isVerbose, clientSocket);
+                        HttpServer.handleRequest(method, path, headers, null, isVerbose, null);
                     }
                 }
             }
         }
 
         in.close();
-        out.close();
-        clientSocket.close();
     }
 
     private static void processListFilesRequest(String directoryPath, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {
