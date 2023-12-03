@@ -19,6 +19,8 @@ public class Packet {
     public static final int DATA_ACK = 4; // New type for acknowledgment of data packets
     public static final int DATA_END = 5;
 
+    public static final int Final_Response = 6;
+
     public static final int MIN_LEN = 11;
     public static final int MAX_LEN = 11 + 1024;
     public static final int REQ_RESP = 5;

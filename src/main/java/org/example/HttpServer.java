@@ -14,19 +14,19 @@ public class HttpServer {
     public static void main(String[] args) {
     }
 
-    public static void handleRequest(String method, String path, Map<String, String> headers, OutputStream out, boolean isVerbose, Socket clientSocket) throws IOException {
+    public static byte[] handleRequest(String method, String path, Map<String, String> headers, OutputStream out, boolean isVerbose, Socket clientSocket) throws IOException {
 
         if ("GET".equalsIgnoreCase(method)) {
-            processGETRequest(path, headers, out, isVerbose);
+            return (processGETRequest(path, headers, out, isVerbose));
         } else if ("POST".equalsIgnoreCase(method)) {
-            processPOSTRequest(path, headers, clientSocket.getInputStream(), out, isVerbose);
+            return (processPOSTRequest(path, headers, clientSocket.getInputStream(), out, isVerbose));
         } else {
-            sendResponse(501, "Not Implemented", "HTTP method not supported", out, isVerbose);
+            return (sendResponse(501, "Not Implemented", "HTTP method not supported", out, isVerbose));
         }
     }
 
 
-    private static void processGETRequest(String path, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {
+    private static byte[] processGETRequest(String path, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {
         Map<String, String> queryParameters = getQueryParameters(path);
 
         String host = headers.getOrDefault("Host", "localhost");
@@ -50,13 +50,13 @@ public class HttpServer {
 
         System.out.println("REQUEST PARSED");
         if (isVerbose) {
-            sendVerboseJSONResponse(200, "OK", jsonResponse, out);
+            return (sendVerboseJSONResponse(200, "OK", jsonResponse, out));
         } else {
-            sendJSONResponse(200, "OK", jsonResponse, out);
+            return (sendJSONResponse(200, "OK", jsonResponse, out));
         }
     }
 
-    private static void processPOSTRequest(String path, Map<String, String> headers, InputStream requestBody, OutputStream out, boolean isVerbose) throws IOException {
+    private static byte[] processPOSTRequest(String path, Map<String, String> headers, InputStream requestBody, OutputStream out, boolean isVerbose) throws IOException {
         String host = headers.getOrDefault("Host", "localhost");
         String userAgent = headers.getOrDefault("User-Agent", "Java-http-client/21.0.1");
 
@@ -94,11 +94,10 @@ public class HttpServer {
         jsonResponse.addProperty("url", "http://" + host + path);
 
 
-
         if (isVerbose) {
-            sendVerboseJSONResponse(200, "OK", jsonResponse, out);
+            return (sendVerboseJSONResponse(200, "OK", jsonResponse, out));
         } else {
-            sendJSONResponse(200, "OK", jsonResponse, out);
+            return (sendJSONResponse(200, "OK", jsonResponse, out));
         }
     }
 
@@ -124,7 +123,7 @@ public class HttpServer {
         return queryParameters;
     }
 
-    public static void sendJSONResponse(int statusCode, String statusText, JsonObject json, OutputStream out) throws IOException {
+    public static byte[] sendJSONResponse(int statusCode, String statusText, JsonObject json, OutputStream out) throws IOException {
         String jsonString = json.toString();
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Date: " + new Date() + "\r\n";
@@ -132,12 +131,12 @@ public class HttpServer {
         response += "Content-Length: " + jsonString.length() + "\r\n";
         response += "\r\n" + jsonString;
 
-        System.out.println(response);
-//        out.write(response.getBytes());
+//        System.out.println(response);
+        return response.getBytes();
     }
 
 
-    public static void sendVerboseJSONResponse(int statusCode, String statusText, JsonObject json, OutputStream out) throws IOException {
+    public static byte[] sendVerboseJSONResponse(int statusCode, String statusText, JsonObject json, OutputStream out) throws IOException {
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Server: CNAssgn2LocalHTTPServer\r\n";
         response += "Date: " + new Date() + "\r\n";
@@ -148,11 +147,11 @@ public class HttpServer {
         response += "Access-Control-Allow-Credentials: true\r\n";
         response += "\r\n" + json.toString();
 
-        System.out.println(response);
-//        out.write(response.getBytes());
+//        System.out.println(response);
+        return response.getBytes();
     }
 
-    public static void sendResponse(int statusCode, String statusText, String content, OutputStream out, boolean isVerbose) throws IOException {
+    public static byte[] sendResponse(int statusCode, String statusText, String content, OutputStream out, boolean isVerbose) throws IOException {
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Date: " + new Date() + "\r\n";
 
@@ -170,8 +169,8 @@ public class HttpServer {
 
         response += "\r\n" + content;
 
-        System.out.println(response);
-//        out.write(response.getBytes());
+//        System.out.println(response);
+        return response.getBytes();
     }
 
 }

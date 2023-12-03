@@ -3,6 +3,7 @@ package org.example;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.channels.DatagramChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Date;
@@ -50,10 +51,11 @@ public class FileServer {
 //        }
 //    }
 
-    public static void handleRequest(String request) throws IOException {
+    public static byte[] handleRequest(String request) throws IOException {
         StringReader stringReader = new StringReader(request);
         BufferedReader in = new BufferedReader(stringReader);
         String dir = "";
+        byte[] payload = new byte[0];
 
         String requestLine = in.readLine();
         if (requestLine != null) {
@@ -137,13 +139,15 @@ public class FileServer {
                             }
                         }
                     } else if ("httpc".equalsIgnoreCase(headers.get("Request-Type"))) {
-                        HttpServer.handleRequest(method, path, headers, null, isVerbose, null);
+                        payload = HttpServer.handleRequest(method, path, headers, null, isVerbose, null);
                     }
                 }
             }
         }
 
+
         in.close();
+        return payload;
     }
 
     private static void processListFilesRequest(String directoryPath, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {

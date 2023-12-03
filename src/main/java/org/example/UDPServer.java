@@ -91,8 +91,7 @@ public class UDPServer {
                         break;
                     case Packet.DATA_END:
                         System.out.println();
-                        isDataEndReceived = true;
-                        handleRequest(requestReceivedSoFar);
+                        handleDataEndPacket(channel, receivedPacket, routerAddress);
                         System.out.println("Completed the transfer of all packets!");
                         break;
                     default:
@@ -146,6 +145,8 @@ public class UDPServer {
     private static void handleSynPacket(DatagramChannel channel, Packet packet, SocketAddress routerAddress) throws Exception {
 
         int clientSequenceNumber = (int) packet.getSequenceNumber();
+
+        resetServerVariables();
 
         while (clientSequenceNumber - serverSequenceNumber < 1000) {
             Random random = new Random();
@@ -253,6 +254,18 @@ public class UDPServer {
         }
     }
 
+    private static void handleDataEndPacket(DatagramChannel channel, Packet dataPacket, SocketAddress routerAddress) throws Exception {
+
+        byte[] payloadResponse = handleRequest(requestReceivedSoFar);
+
+        serverSequenceNumber++;
+        Packet dataEndResponsePacket = constructReplyPacket((byte) Packet.Final_Response, serverSequenceNumber, dataPacket, payloadResponse);
+        sendPacket(channel, dataEndResponsePacket, routerAddress);
+        System.out.println("Server: Final_Response sent to client. | " + dataEndResponsePacket.getSequenceNumber() + " ACK sent: " + dataEndResponsePacket.getAckNumber());
+
+    }
+
+
     private static boolean handshakeComplete() {
         return lastReceivedSequenceNumber >= 0;
     }
@@ -269,32 +282,21 @@ public class UDPServer {
         return p;
     }
 
-    public static Boolean Timout(DatagramChannel channel) throws IOException {
-        // Try to receive a packet within timeout.
-        channel.configureBlocking(false);
-        Selector selector = Selector.open();
-        channel.register(selector, OP_READ);
-        System.out.println("Waiting for Response:");
-        selector.select(7000);
-        System.out.println();
+    public static void resetServerVariables() {
+        lastReceivedSequenceNumber = -1;
 
-        Set<SelectionKey> keys = selector.selectedKeys();
-        if (keys.isEmpty()) {
-            System.out.println("No response after timout");
-            System.out.println();
-            return true;
-        }
-        keys.clear();
-        return false;
+        windowSizeServer = 4;
+        requestReceivedSoFar = "";
+
+        isDataEndReceived = false;
+
+        receivedWindowPackets = new HashMap<>();
+
+        receivedPackets = new TreeMap<>();
+
+        lastReceivedClientSequenceNumber = -1;
+        serverSequenceNumber = 2000; // Initial server sequence number
+        expectedDataSequenceNumber = -1;
     }
 
-    private static boolean containsPacket(List<Packet> packetList, Packet targetPacket) {
-        for (Packet packet : packetList) {
-            if (packet.getSequenceNumber() == targetPacket.getSequenceNumber() &&
-                    packet.getAckNumber() == targetPacket.getAckNumber()) {
-                return true;
-            }
-        }
-        return false;
-    }
 }
