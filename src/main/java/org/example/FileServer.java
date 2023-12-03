@@ -101,15 +101,15 @@ public class FileServer {
                 Path relative = Paths.get(DIR_PATH);
 
                 if (!relative.startsWith(base)) {
-                    sendResponse(403, "Forbidden", "Access to the requested directory is not allowed.", null, isVerbose);
+                    return sendResponse(403, "Forbidden", "Access to the requested directory is not allowed.", null, isVerbose);
                 } else {
                     if ("httpfs".equalsIgnoreCase(headers.get("Request-Type"))) {
                         if ("GET".equalsIgnoreCase(method) && path.startsWith("/")) {
                             String filePath = DIR_PATH + path;
                             if ("/".equals(path)) {
-                                processListFilesRequest(filePath, headers, null, isVerbose);
+                                return (processListFilesRequest(filePath, headers, null, isVerbose)).getBytes();
                             } else {
-                                processServeFileRequest(filePath, null, isVerbose);
+                                return (processServeFileRequest(filePath, null, isVerbose));
                             }
                         }
                         if ("POST".equalsIgnoreCase(method) && path.startsWith("/")) {
@@ -143,12 +143,12 @@ public class FileServer {
                                         writer.write(content);
                                     }
 
-                                    sendResponse(200, "OK", "File created or overwritten", null, isVerbose);
+                                    return (sendResponse(200, "OK", "File created or overwritten", null, isVerbose));
                                 } else {
-                                    sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", null, isVerbose);
+                                    return (sendResponse(409, "Conflict", "File already exists, and overwrite is not allowed", null, isVerbose));
                                 }
                             } else {
-                                sendResponse(400, "Bad Request", "Invalid request format", null, isVerbose);
+                                return (sendResponse(400, "Bad Request", "Invalid request format", null, isVerbose));
                             }
                         }
                     } else if ("httpc".equalsIgnoreCase(headers.get("Request-Type"))) {
@@ -168,7 +168,7 @@ public class FileServer {
         return payload;
     }
 
-    private static void processListFilesRequest(String directoryPath, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {
+    private static String processListFilesRequest(String directoryPath, Map<String, String> headers, OutputStream out, boolean isVerbose) throws IOException {
         File directory = new File(directoryPath);
         File[] files = directory.listFiles();
 
@@ -215,13 +215,14 @@ public class FileServer {
                 contentType = "application/text/plain";
             }
 
-            sendResponseWithContentType(200, "OK", responseContent, contentType, out, isVerbose);
+            return (sendResponseWithContentType(200, "OK", responseContent, contentType, out, isVerbose));
         } else {
             sendResponse(404, "Not Found", "Directory not found", out, isVerbose);
         }
+        return directoryPath;
     }
 
-    private static void sendResponseWithContentType(int statusCode, String statusText, String content, String contentType, OutputStream out, boolean isVerbose) throws IOException {
+    private static String sendResponseWithContentType(int statusCode, String statusText, String content, String contentType, OutputStream out, boolean isVerbose) throws IOException {
         String response;
         if (isVerbose) {
             response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
@@ -241,46 +242,55 @@ public class FileServer {
             response += "\r\n" + content;
         }
 
-        out.write(response.getBytes());
+        System.out.println(response);
+        return response;
     }
 
 
-    private static void processServeFileRequest(String filePath, OutputStream out, boolean isVerbose) throws IOException {
+    private static byte[] processServeFileRequest(String filePath, OutputStream out, boolean isVerbose) throws IOException {
         File file = new File(filePath);
 
         if (file.exists()) {
+            System.out.println("File found");
             if (isVerbose) {
-                sendVerboseFileResponse(200, "OK", file, out);
+                return sendVerboseFileResponse(200, "OK", file, out);
             } else {
-                sendFileResponse(200, "OK", file, out);
+                return sendFileResponse(200, "OK", file, out);
             }
         } else {
-            sendResponse(404, "Not Found", "File not found", out, isVerbose);
+            return sendResponse(404, "Not Found", "File not found", out, isVerbose);
         }
     }
 
-    private static void sendFileResponse(int statusCode, String statusText, File file, OutputStream out) throws IOException {
+    private static byte[] sendFileResponse(int statusCode, String statusText, File file, OutputStream out) throws IOException {
+        StringBuilder responseBuilder = new StringBuilder();
+
         FileInputStream fileInputStream = new FileInputStream(file);
         byte[] buffer = new byte[1024];
         int bytesRead;
 
-        String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
-        response += "Content-Length: " + file.length() + "\r\n";
-        response += "\r\n";
-        out.write(response.getBytes());
+        // Construct HTTP response headers
+        responseBuilder.append("HTTP/1.1 ").append(statusCode).append(" ").append(statusText).append("\r\n");
+        responseBuilder.append("Content-Length: ").append(file.length()).append("\r\n");
+        responseBuilder.append("\r\n");
 
+        // Read and append file content to the response
         while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-            out.write(buffer, 0, bytesRead);
+            responseBuilder.append(new String(buffer, 0, bytesRead));
         }
 
         fileInputStream.close();
+
+        return responseBuilder.toString().getBytes();
     }
 
-    private static void sendVerboseFileResponse(int statusCode, String statusText, File file, OutputStream out) throws IOException {
+    private static byte[] sendVerboseFileResponse(int statusCode, String statusText, File file, OutputStream out) throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         FileInputStream fileInputStream = new FileInputStream(file);
         byte[] buffer = new byte[1024];
         int bytesRead;
 
+        // Construct HTTP response headers
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Server: CNAssgn2LocalHTTPServer\r\n";
         response += "Date: " + new Date() + "\r\n";
@@ -290,13 +300,20 @@ public class FileServer {
         response += "Access-Control-Allow-Origin: *\r\n";
         response += "Access-Control-Allow-Credentials: true\r\n";
         response += "\r\n";
-        out.write(response.getBytes());
+        System.out.println(response);
 
+        // Write the headers to the byte array output stream
+        byteArrayOutputStream.write(response.getBytes());
+
+        // Read and write file content to the byte array output stream
         while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-            out.write(buffer, 0, bytesRead);
+            byteArrayOutputStream.write(buffer, 0, bytesRead);
         }
 
         fileInputStream.close();
+
+        // Return the byte array containing the complete response
+        return byteArrayOutputStream.toByteArray();
     }
 
 

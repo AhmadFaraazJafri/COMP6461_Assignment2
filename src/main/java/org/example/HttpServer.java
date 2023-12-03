@@ -137,7 +137,7 @@ public class HttpServer {
         response += "Access-Control-Allow-Credentials: true\r\n";
         response += "\r\n" + json.toString();
 
-//        System.out.println(response);
+        System.out.println(response);
         return response.getBytes();
     }
 
@@ -159,7 +159,7 @@ public class HttpServer {
 
         response += "\r\n" + content;
 
-//        System.out.println(response);
+        System.out.println(response);
         return response.getBytes();
     }
 
