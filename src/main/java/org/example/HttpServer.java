@@ -3,8 +3,6 @@ package org.example;
 import com.google.gson.*;
 
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,12 +12,12 @@ public class HttpServer {
     public static void main(String[] args) {
     }
 
-    public static byte[] handleRequest(String method, String path, Map<String, String> headers, OutputStream out, boolean isVerbose, Socket clientSocket) throws IOException {
+    public static byte[] handleRequest(String method, String path, Map<String, String> headers, OutputStream out, boolean isVerbose, String inlinedata) throws IOException {
 
         if ("GET".equalsIgnoreCase(method)) {
             return (processGETRequest(path, headers, out, isVerbose));
         } else if ("POST".equalsIgnoreCase(method)) {
-            return (processPOSTRequest(path, headers, clientSocket.getInputStream(), out, isVerbose));
+            return (processPOSTRequest(path, headers, inlinedata, out, isVerbose));
         } else {
             return (sendResponse(501, "Not Implemented", "HTTP method not supported", out, isVerbose));
         }
@@ -50,31 +48,23 @@ public class HttpServer {
 
         System.out.println("REQUEST PARSED");
         if (isVerbose) {
-            return (sendVerboseJSONResponse(200, "OK", jsonResponse, out));
+            return (sendVerboseJSONResponse(200, "OK", jsonResponse));
         } else {
-            return (sendJSONResponse(200, "OK", jsonResponse, out));
+            return (sendJSONResponse(200, "OK", jsonResponse));
         }
     }
 
-    private static byte[] processPOSTRequest(String path, Map<String, String> headers, InputStream requestBody, OutputStream out, boolean isVerbose) throws IOException {
+    private static byte[] processPOSTRequest(String path, Map<String, String> headers, String requestBody, OutputStream out, boolean isVerbose) throws IOException {
         String host = headers.getOrDefault("Host", "localhost");
         String userAgent = headers.getOrDefault("User-Agent", "Java-http-client/21.0.1");
 
+//        sout
 
         int contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
 
-        char[] requestBodyData = new char[contentLength];
-        int bytesRead = 0;
-        while (bytesRead < contentLength) {
-            int c = requestBody.read();
-            if (c == -1) {
-                break;
-            }
-            requestBodyData[bytesRead] = (char) c;
-            bytesRead++;
-        }
 
-        String requestBodyContent = new String(requestBodyData);
+
+        String requestBodyContent = new String(requestBody);
 
         JsonObject requestBodyJson = parseJSON(requestBodyContent);
 
@@ -95,9 +85,9 @@ public class HttpServer {
 
 
         if (isVerbose) {
-            return (sendVerboseJSONResponse(200, "OK", jsonResponse, out));
+            return (sendVerboseJSONResponse(200, "OK", jsonResponse));
         } else {
-            return (sendJSONResponse(200, "OK", jsonResponse, out));
+            return (sendJSONResponse(200, "OK", jsonResponse));
         }
     }
 
@@ -123,7 +113,7 @@ public class HttpServer {
         return queryParameters;
     }
 
-    public static byte[] sendJSONResponse(int statusCode, String statusText, JsonObject json, OutputStream out) throws IOException {
+    public static byte[] sendJSONResponse(int statusCode, String statusText, JsonObject json) throws IOException {
         String jsonString = json.toString();
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Date: " + new Date() + "\r\n";
@@ -136,7 +126,7 @@ public class HttpServer {
     }
 
 
-    public static byte[] sendVerboseJSONResponse(int statusCode, String statusText, JsonObject json, OutputStream out) throws IOException {
+    public static byte[] sendVerboseJSONResponse(int statusCode, String statusText, JsonObject json) throws IOException {
         String response = "HTTP/1.1 " + statusCode + " " + statusText + "\r\n";
         response += "Server: CNAssgn2LocalHTTPServer\r\n";
         response += "Date: " + new Date() + "\r\n";

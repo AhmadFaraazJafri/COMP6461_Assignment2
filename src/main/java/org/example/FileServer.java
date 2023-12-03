@@ -1,9 +1,6 @@
 package org.example;
 
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.nio.channels.DatagramChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Date;
@@ -17,9 +14,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 
-import static org.example.HttpServer.sendJSONResponse;
 import static org.example.HttpServer.sendResponse;
-import static org.example.HttpServer.sendVerboseJSONResponse;
 
 public class FileServer {
 
@@ -84,6 +79,24 @@ public class FileServer {
                     DIR_PATH = dir;
                 }
 
+                String inlineData = "";
+                if ("POST".equalsIgnoreCase(method) && headers.containsKey("Content-Type") &&
+                        "application/json".equalsIgnoreCase(headers.get("Content-Type"))) {
+
+                    // Check if the request has a Content-Length header
+                    if (headers.containsKey("Content-Length")) {
+                        int contentLength = Integer.parseInt(headers.get("Content-Length"));
+
+                        // Read the JSON payload
+                        char[] payloadChars = new char[contentLength];
+                        in.read(payloadChars);
+
+                        inlineData = new String(payloadChars);
+
+//                        System.out.println("JSON Payload: " + inlineData);
+                    }
+                }
+
                 Path base = Paths.get(BASE_PATH);
                 Path relative = Paths.get(DIR_PATH);
 
@@ -139,7 +152,12 @@ public class FileServer {
                             }
                         }
                     } else if ("httpc".equalsIgnoreCase(headers.get("Request-Type"))) {
-                        payload = HttpServer.handleRequest(method, path, headers, null, isVerbose, null);
+                        if (method.equalsIgnoreCase("GET")) {
+                            payload = HttpServer.handleRequest(method, path, headers, null, isVerbose, null);
+                        }
+                        else {
+                            payload = HttpServer.handleRequest(method, path, headers, null, isVerbose, inlineData);
+                        }
                     }
                 }
             }

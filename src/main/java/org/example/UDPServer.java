@@ -222,7 +222,7 @@ public class UDPServer {
                 // Convert the payload to a String (assuming it contains text data)
                 String packetpayloadString = new String(packetpayload, StandardCharsets.UTF_8);
 //                requestReceivedSoFar = requestReceivedSoFar + packetpayloadString;
-                System.out.println("REQUEST RECEIVED SO FAR");
+//                System.out.println("REQUEST RECEIVED SO FAR");
 //                System.out.println(requestReceivedSoFar);
                 requestReceivedSoFar = "";
                 for (Map.Entry<Integer, Packet> entry : receivedPackets.entrySet()) {
